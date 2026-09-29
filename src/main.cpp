@@ -4,23 +4,63 @@
 #include <memory>
 #include <random>
 #include <vector>
+#include <cmath>
 
 #include <SFML/Graphics.hpp>
+
+#define SINGLE_EXPR(expression) [](const float& t) ->float {return expression;};
 
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 800;
 const int FPS_LIMIT = 30;
+constexpr auto PI = std::numbers::pi_v<float>;
+constexpr float hPI = PI / 2;
+
+constexpr float c1 = 1.70158;
+constexpr float c2 = c1 * 1.525;
+
 
 // global tween function
-std::function<float(float, float, float)> tween = [](float a, float b, float t) {
-    return (1 - t) * a + t * b;
+
+using transitionFuncType = std::function<float(float)>;
+
+transitionFuncType transition = [](const float& t) ->float {
+    return t;
 };
+
+std::function<float(float, float, float)> tween = [](float a, float b, float t) {
+    return (1 - transition(t)) * a + (transition(t)) * b;
+};
+
+
+inline transitionFuncType getTransition(const char& c, const transitionFuncType& og) {
+
+    switch(c) {
+
+        case '1' : return SINGLE_EXPR(t); // linear
+        case '2' : return SINGLE_EXPR(1 - std::pow((1-t),4)); // easeOutQuart
+        case '3' : return SINGLE_EXPR(1 - std::cos(t * hPI)); // easeInSine
+        case '4' : return SINGLE_EXPR(t == 1 ? 1 : 1 - std::pow(2, -10 * t)); //  easeOutExpo
+        case '5' : return SINGLE_EXPR(std::sqrt(1 - std::pow(t - 1, 2));); // easeOutCirc
+        case '6' : return SINGLE_EXPR(t < 0.5 ? (1 - std::sqrt(1 - std::pow(2 * t, 2))) / 2: (std::sqrt(1 - std::pow(-2 * t + 2, 2)) + 1) / 2); // easeInOutCirc
+        case '7' : return SINGLE_EXPR(1 - std::sqrt(1 - std::pow(t, 2))); // easeInCirc
+        case '8' : return SINGLE_EXPR(t == 0 ? 0 : std::pow(2, 10 * t - 10)); // easeInExpo
+        case '9' : return SINGLE_EXPR(t < 0.5 ? 2 * t * t : 1 - std::pow(-2 * t + 2, 2) / 2); // easeInOutQuad
+        default: return og;
+}
+
+}
+
+
+
 
 void handleInput(sf::Window& window, bool& shouldQuit) {
     while (const std::optional<sf::Event> event = window.pollEvent()) {
         if (event->is<sf::Event::Closed>()) {
             window.close();
             shouldQuit = true;
+        } else if (const auto* keyPressed = event->getIf<sf::Event::TextEntered>()) {
+            transition = getTransition(static_cast<char>(keyPressed->unicode), transition);
         }
 
         // ====== ====== ======
@@ -55,9 +95,11 @@ void render(sf::RenderWindow& window) {
     sf::CircleShape circle(radius);
 
     circle.setPosition(sf::Vector2f(tween(0, WINDOW_WIDTH - diameter, (t) * FrameStep), WINDOW_HEIGHT / 3));
+
     t += sign;
     if (t <= 0) sign = 1;
     else if (t >= AnimationTime) sign = -1; // making sure t oscilates between 0 and AnimationTime
+
 
     window.draw(circle);
 
